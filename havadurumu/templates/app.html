@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#08101f">
+    <meta
+        name="description"
+        content="Dünyanın her yerinden güncel hava durumu ve üç günlük tahmin."
+    >
+    <title>Atmos — Hava Durumu</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='react/assets/app.css') }}">
+</head>
+<body>
+    <div id="root"></div>
+    <script id="initial-weather-state" type="application/json">{{ initial_state | tojson }}</script>
+    <noscript>
+        <main class="no-script">
+            <h1>Atmos Hava Durumu</h1>
+            {% if error %}
+                <p>{{ error }}</p>
+            {% elif report %}
+                <h2>{{ report.current.city }}, {{ report.current.country }}</h2>
+                <p>{{ report.current.temperature_c }}°C · {{ report.current.description }}</p>
+                {% for forecast in report.forecasts %}
+                    <p>{{ forecast.date }} · {{ forecast.max_temperature_c }}° / {{ forecast.min_temperature_c }}° · {{ forecast.description }}</p>
+                {% endfor %}
+            {% else %}
+                <p>Hava durumunu görüntülemek için JavaScript'i etkinleştirin.</p>
+            {% endif %}
+        </main>
+    </noscript>
+    <script type="module" src="{{ url_for('static', filename='react/assets/app.js') }}"></script>
+</body>
+</html>

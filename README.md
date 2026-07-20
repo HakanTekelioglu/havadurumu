@@ -1,71 +1,76 @@
-# Hava Durumu
+# Atmos Hava Durumu
 
-Flask ve [wttr.in](https://wttr.in) ile çalışan, katmanlı ve test edilebilir bir
-hava durumu uygulaması.
+React 19 ve Flask ile çalışan, wttr.in verilerini modern ve responsive bir
+arayüzde sunan hava durumu uygulaması.
 
 ## Mimari
 
-Kod, yüksek cohesion ve düşük coupling ilkelerine göre sorumluluklarına ayrılır:
-
 ```text
-HTTP isteği
-    ↓
-web/routes.py                 Flask ve şablon yanıtları
-    ↓
-services/weather_service.py  Girdi ve kullanım senaryosu kuralları
-    ↓
-ports/weather_provider.py    Sağlayıcıdan beklenen sözleşme
-    ↑
-infrastructure/              wttr.in adaptörü ve dış JSON dönüşümü
-    ↓
-domain/models.py             Dış sistemlerden bağımsız veri modelleri
+React + TypeScript arayüzü
+          ↓ JSON
+web/routes.py
+          ↓
+services/weather_service.py
+          ↓
+ports/weather_provider.py
+          ↑
+infrastructure/wttr_provider.py
 ```
 
-- `domain`: Hava durumu modellerini içerir; Flask veya `requests` bilmez.
-- `ports`: Servisin dış veri kaynağından beklediği küçük arayüzü tanımlar.
-- `services`: Şehir girdisini doğrular ve sorgu kullanım senaryosunu yürütür.
-- `infrastructure`: HTTP iletişimi ile wttr.in JSON şemasını kapsüller.
-- `web`: İstek/yanıt ve şablon işlemlerini yürütür.
-- `create_app`: Somut bağımlılıkları yalnızca uygulama kurulurken birbirine bağlar.
+- `frontend`: React bileşenleri, etkileşimler ve görsel sistem.
+- `havadurumu/web`: React kabuğunu sunan rotalar ve `/api/weather` JSON API'si.
+- `havadurumu/services`: Şehir girdisi ve kullanım senaryosu kuralları.
+- `havadurumu/infrastructure`: wttr.in adaptörü.
+- `havadurumu/domain`: Dış sistemlerden bağımsız veri modelleri.
 
-Bu yapı sayesinde wttr.in başka bir sağlayıcıyla web ve servis katmanı
-değiştirilmeden değiştirilebilir. Testler de gerçek ağ çağrısı yerine
-`WeatherProvider` sözleşmesine uyan sahte nesneler kullanır.
+Arayüz; hava koşuluna göre renk değiştiren tema, °C/°F seçimi, son aramalar,
+yükleme ve hata durumları ile klavye ve mobil kullanım desteği içerir.
 
-## Çalıştırma
+## Kurulum
 
-Python 3.13 ve [uv](https://docs.astral.sh/uv/) ile:
+Python bağımlılıklarını ve frontend paketlerini kurun:
 
 ```powershell
 uv sync
+npm install
+```
+
+## Geliştirme
+
+İki terminal kullanın:
+
+```powershell
 uv run python app.py
 ```
 
-Uygulama varsayılan olarak `http://127.0.0.1:5000` adresinde açılır.
+```powershell
+npm run dev
+```
 
-## Test
-
-Test paketi yalnızca standart `unittest` modülünü kullanır:
+Vite geliştirme sunucusu `/api` isteklerini Flask'a yönlendirir. Yalnızca Flask
+üzerinden çalıştırmak için önce üretim paketini oluşturun:
 
 ```powershell
+npm run build
+uv run python app.py
+```
+
+HMR destekli geliştirme arayüzü `http://localhost:5173`, üretim paketiyle Flask
+uygulaması ise `http://127.0.0.1:5000` adresinde açılır.
+
+## Test ve doğrulama
+
+```powershell
+npm run check
+npm run build
 uv run python -m unittest discover -v
 ```
 
-## Yapılandırma
+## API
 
-`create_app` fonksiyonuna Flask yapılandırması verilebilir:
-
-```python
-from havadurumu import create_app
-
-app = create_app(
-    {
-        "WTTR_BASE_URL": "https://wttr.in",
-        "WEATHER_REQUEST_TIMEOUT": 5,
-        "WEATHER_LANGUAGE": "tr",
-    }
-)
+```text
+GET /api/weather?sehir=İstanbul
 ```
 
-Testlerde veya farklı bir veri kaynağı kullanırken `provider=` parametresiyle
-`WeatherProvider` sözleşmesine uyan bir nesne enjekte edilebilir.
+Başarılı yanıt güncel hava koşullarını ve üç günlük tahmini JSON olarak döndürür.
+Geçersiz şehir ve servis hataları uygun HTTP durum kodlarıyla iletilir.

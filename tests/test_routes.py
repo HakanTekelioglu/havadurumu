@@ -65,6 +65,24 @@ class WeatherRouteTests(unittest.TestCase):
         self.assertIn("22°C", html)
         self.assertIn("2026-07-20", html)
 
+    def test_weather_api_returns_domain_model_as_json(self) -> None:
+        response = self.client.get("/api/weather?sehir=%C4%B0stanbul")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["current"]["city"], "İstanbul")
+        self.assertEqual(payload["current"]["temperature_c"], 22)
+        self.assertEqual(payload["forecasts"][0]["date"], "2026-07-20")
+
+    def test_weather_api_returns_structured_error(self) -> None:
+        self.provider.error = LocationNotFoundError()
+
+        response = self.client.get("/api/weather?sehir=Olmayan")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["query"], "Olmayan")
+        self.assertIn("Şehir bulunamadı", response.get_json()["error"])
+
     def test_empty_city_returns_validation_error(self) -> None:
         response = self.client.get("/hava?sehir=%20%20")
 
