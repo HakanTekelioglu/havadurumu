@@ -1,0 +1,1 @@
+"""Dış servis adaptörleri."""

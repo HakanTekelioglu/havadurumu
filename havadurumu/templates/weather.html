@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}{{ city }} · Hava Durumu{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('weather.index') }}" class="back-link">← Ana sayfa</a>
+
+<section class="panel search-panel compact" aria-label="Yeni hava durumu araması">
+    {% set input_id = "result-city" %}
+    {% set placeholder = "Başka bir şehir ara..." %}
+    {% include "_search_form.html" %}
+</section>
+
+{% if error %}
+    <section class="error-message" role="alert">
+        <p>⚠️ {{ error }}</p>
+    </section>
+{% else %}
+    <article class="panel current-weather">
+        <header class="weather-heading">
+            <h1>📍 {{ report.current.city }}</h1>
+            <p>{{ report.current.country }}</p>
+        </header>
+
+        <div class="temperature-summary">
+            <strong>{{ report.current.temperature_c }}°C</strong>
+            <p>{{ report.current.description }}</p>
+        </div>
+
+        <dl class="details">
+            <div><dt>🌡️ Hissedilen</dt><dd>{{ report.current.feels_like_c }}°C</dd></div>
+            <div><dt>💧 Nem</dt><dd>%{{ report.current.humidity_percent }}</dd></div>
+            <div><dt>💨 Rüzgâr</dt><dd>{{ report.current.wind_speed_kmph }} km/sa</dd></div>
+            <div><dt>🧭 Rüzgâr yönü</dt><dd>{{ report.current.wind_direction }}</dd></div>
+            <div><dt>📊 Basınç</dt><dd>{{ report.current.pressure_hpa }} hPa</dd></div>
+            <div><dt>👁️ Görüş</dt><dd>{{ report.current.visibility_km }} km</dd></div>
+        </dl>
+    </article>
+
+    {% if report.forecasts %}
+        <section aria-labelledby="forecast-title">
+            <h2 id="forecast-title" class="section-title">📅 3 günlük hava tahmini</h2>
+            <div class="forecast-grid">
+                {% for forecast in report.forecasts %}
+                    <article class="panel forecast-card">
+                        <h3>{{ forecast.date }}</h3>
+                        <p class="forecast-temperatures">
+                            <strong>{{ forecast.max_temperature_c }}°</strong>
+                            <span>/ {{ forecast.min_temperature_c }}°</span>
+                        </p>
+                        <p>{{ forecast.description }}</p>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+{% endif %}
+{% endblock %}

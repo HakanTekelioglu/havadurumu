@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<header class="hero">
+    <h1>🌤️ Hava Durumu</h1>
+    <p>Dünyanın her yerinden anlık hava durumu bilgisi</p>
+</header>
+
+<section class="panel search-panel" aria-label="Hava durumu arama">
+    {% set input_id = "home-city" %}
+    {% set placeholder = "Şehir adı girin (örn. İstanbul, Ankara, İzmir)" %}
+    {% include "_search_form.html" %}
+
+    <nav class="popular-cities" aria-label="Popüler şehirler">
+        <p>Popüler şehirler</p>
+        {% for label, query in [
+            ("İstanbul", "Istanbul"),
+            ("Ankara", "Ankara"),
+            ("İzmir", "Izmir"),
+            ("Antalya", "Antalya"),
+            ("Londra", "London"),
+            ("Paris", "Paris"),
+            ("New York", "New York"),
+            ("Tokyo", "Tokyo")
+        ] %}
+            <a href="{{ url_for('weather.weather', sehir=query) }}" data-weather-link>{{ label }}</a>
+        {% endfor %}
+    </nav>
+</section>
+{% endblock %}
