@@ -49,6 +49,54 @@
   --sky: #879597;
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  color: #142437;
+  background: #eef4f9;
+  --bg: #eef4f9;
+  --bg-deep: #dce8f1;
+  --surface: rgba(20, 44, 69, 0.065);
+  --surface-hover: rgba(20, 44, 69, 0.105);
+  --line: rgba(20, 44, 69, 0.16);
+  --text: #142437;
+  --muted: #607084;
+  --accent: #8bc34a;
+  --accent-strong: #4e7d18;
+  --sky: #3189c6;
+  --danger: #c84432;
+  --shadow: 0 20px 55px rgba(46, 70, 92, 0.14);
+}
+
+:root[data-theme="light"][data-weather="cloudy"] {
+  --accent: #9eb5cf;
+  --accent-strong: #48637e;
+  --sky: #6687aa;
+}
+
+:root[data-theme="light"][data-weather="rain"] {
+  --accent: #59bce0;
+  --accent-strong: #176b8c;
+  --sky: #3574a5;
+}
+
+:root[data-theme="light"][data-weather="storm"] {
+  --accent: #ae91e0;
+  --accent-strong: #624494;
+  --sky: #7158a7;
+}
+
+:root[data-theme="light"][data-weather="snow"] {
+  --accent: #b9e5f3;
+  --accent-strong: #34718a;
+  --sky: #6fa8c0;
+}
+
+:root[data-theme="light"][data-weather="fog"] {
+  --accent: #b7c2c4;
+  --accent-strong: #526164;
+  --sky: #718589;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -88,7 +136,7 @@ a {
 
 button:focus-visible,
 input:focus-visible {
-  outline: 3px solid rgba(168, 224, 99, 0.55);
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 45%);
   outline-offset: 3px;
 }
 
@@ -102,7 +150,7 @@ input:focus-visible {
   background:
     radial-gradient(circle at 67% 10%, rgba(32, 82, 133, 0.32), transparent 32rem),
     linear-gradient(145deg, var(--bg) 0%, var(--bg-deep) 80%);
-  transition: background 500ms ease;
+  transition: color 250ms ease, background 500ms ease;
 }
 
 .atmosphere {
@@ -231,6 +279,26 @@ input:focus-visible {
 
 .nav-link:hover {
   color: var(--text);
+}
+
+.theme-toggle {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  place-items: center;
+  color: var(--accent-strong);
+  background: var(--surface);
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.theme-toggle:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+  transform: translateY(-1px);
 }
 
 .unit-toggle {
@@ -1157,6 +1225,83 @@ input:focus-visible {
   padding: 24px;
   color: #f5f7fb;
   font-family: system-ui, sans-serif;
+}
+
+:root[data-theme="light"] .app {
+  background:
+    radial-gradient(circle at 67% 10%, rgba(98, 165, 215, 0.24), transparent 32rem),
+    linear-gradient(145deg, var(--bg) 0%, var(--bg-deep) 80%);
+}
+
+:root[data-theme="light"] .site-header,
+:root[data-theme="light"] .site-footer {
+  border-color: rgba(20, 44, 69, 0.11);
+}
+
+:root[data-theme="light"] .unit-toggle {
+  background: rgba(255, 255, 255, 0.58);
+}
+
+:root[data-theme="light"] .search {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+:root[data-theme="light"] .search:focus-within,
+:root[data-theme="light"] .search--large {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+:root[data-theme="light"] .search input::placeholder,
+:root[data-theme="light"] .city-list > span,
+:root[data-theme="light"] .metric-card > p,
+:root[data-theme="light"] .visual-caption,
+:root[data-theme="light"] .site-footer {
+  color: #6a7989;
+}
+
+:root[data-theme="light"] .city-list button,
+:root[data-theme="light"] .forecast-list,
+:root[data-theme="light"] .error-card,
+:root[data-theme="light"] .skeleton {
+  background: rgba(255, 255, 255, 0.48);
+}
+
+:root[data-theme="light"] .city-list button,
+:root[data-theme="light"] .current-card__top p,
+:root[data-theme="light"] .temperature-range span:last-child {
+  color: #34485d;
+}
+
+:root[data-theme="light"] .glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.48));
+}
+
+:root[data-theme="light"] .floating-note,
+:root[data-theme="light"] .refresh-indicator,
+:root[data-theme="light"] .header-actions {
+  color: #34485d;
+  background: rgba(244, 249, 252, 0.94);
+}
+
+:root[data-theme="light"] .orbit-line,
+:root[data-theme="light"] .sun-disc::after {
+  border-color: rgba(20, 44, 69, 0.15);
+}
+
+:root[data-theme="light"] .temperature-bar {
+  background: rgba(20, 44, 69, 0.1);
+}
+
+:root[data-theme="light"] .skeleton::after {
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.75) 50%, transparent 80%);
+}
+
+:root[data-theme="light"] .site-footer span {
+  color: #41556b;
+}
+
+:root[data-theme="light"] .no-script {
+  color: var(--text);
 }
 
 .sr-only {

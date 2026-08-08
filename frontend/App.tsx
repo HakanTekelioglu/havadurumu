@@ -8,8 +8,10 @@ import {
   LocateFixed,
   MapPin,
   Menu,
+  Moon,
   Search,
   Sparkles,
+  Sun,
   Wind,
   X,
 } from "lucide-react";
@@ -19,6 +21,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -36,6 +39,8 @@ type AppProps = {
   initialState: InitialState;
 };
 
+type ColorTheme = "light" | "dark";
+
 const POPULAR_CITIES = [
   "İstanbul",
   "Ankara",
@@ -50,6 +55,17 @@ const POPULAR_CITIES = [
 const getStoredUnit = (): TemperatureUnit => {
   const value = localStorage.getItem("atmos-temperature-unit");
   return value === "f" ? "f" : "c";
+};
+
+const getStoredTheme = (): ColorTheme => {
+  const value = localStorage.getItem("atmos-color-theme");
+  if (value === "light" || value === "dark") {
+    return value;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: light)").matches
+    ? "light"
+    : "dark";
 };
 
 const getRecentCities = (): string[] => {
@@ -68,6 +84,7 @@ export function App({ initialState }: AppProps) {
   const [error, setError] = useState<string | null>(initialState.error);
   const [loading, setLoading] = useState(false);
   const [unit, setUnit] = useState<TemperatureUnit>(getStoredUnit);
+  const [theme, setTheme] = useState<ColorTheme>(getStoredTheme);
   const [recentCities, setRecentCities] = useState<string[]>(getRecentCities);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -146,6 +163,10 @@ export function App({ initialState }: AppProps) {
     document.documentElement.dataset.weather = mood;
   }, [mood]);
 
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void fetchWeather(query);
@@ -165,6 +186,14 @@ export function App({ initialState }: AppProps) {
     setUnit(nextUnit);
   };
 
+  const toggleTheme = () => {
+    setTheme((currentTheme) => {
+      const nextTheme = currentTheme === "dark" ? "light" : "dark";
+      localStorage.setItem("atmos-color-theme", nextTheme);
+      return nextTheme;
+    });
+  };
+
   const focusSearch = () => {
     setMobileMenuOpen(false);
     window.requestAnimationFrame(() => searchInputRef.current?.focus());
@@ -175,7 +204,9 @@ export function App({ initialState }: AppProps) {
       <Atmosphere mood={mood} />
       <Header
         unit={unit}
+        theme={theme}
         onUnitChange={changeUnit}
+        onThemeToggle={toggleTheme}
         onHome={goHome}
         onSearch={focusSearch}
         mobileMenuOpen={mobileMenuOpen}
@@ -228,7 +259,9 @@ function Atmosphere({ mood }: { mood: string }) {
 
 type HeaderProps = {
   unit: TemperatureUnit;
+  theme: ColorTheme;
   onUnitChange: (unit: TemperatureUnit) => void;
+  onThemeToggle: () => void;
   onHome: () => void;
   onSearch: () => void;
   mobileMenuOpen: boolean;
@@ -237,7 +270,9 @@ type HeaderProps = {
 
 function Header({
   unit,
+  theme,
   onUnitChange,
+  onThemeToggle,
   onHome,
   onSearch,
   mobileMenuOpen,
@@ -254,6 +289,16 @@ function Header({
         <nav className={`header-actions ${mobileMenuOpen ? "is-open" : ""}`} aria-label="Ana menü">
           <button className="nav-link" onClick={onHome}>Ana sayfa</button>
           <button className="nav-link" onClick={onSearch}>Şehir ara</button>
+          <button
+            className="theme-toggle"
+            type="button"
+            onClick={onThemeToggle}
+            aria-pressed={theme === "light"}
+            aria-label={theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"}
+            title={theme === "dark" ? "Açık tema" : "Koyu tema"}
+          >
+            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
           <div className="unit-toggle" role="group" aria-label="Sıcaklık birimi">
             <button
               className={unit === "c" ? "is-active" : ""}
