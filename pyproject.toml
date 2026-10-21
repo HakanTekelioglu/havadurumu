@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "havadurumu"
 version = "0.1.0"
@@ -8,3 +12,10 @@ dependencies = [
     "flask>=3.1.2",
     "requests>=2.32.5",
 ]
+
+[tool.setuptools.packages.find]
+include = ["havadurumu", "havadurumu.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+havadurumu = ["templates/*.html", "static/react/assets/*"]
