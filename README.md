@@ -58,11 +58,40 @@ uv run python app.py
 HMR destekli geliştirme arayüzü `http://localhost:5173`, üretim paketiyle Flask
 uygulaması ise `http://127.0.0.1:5000` adresinde açılır.
 
+## Cloudflare Pages yayını
+
+Cloudflare Pages → atmos → Settings → Build configuration alanlarını şöyle ayarlayın:
+
+| Alan | Değer |
+| --- | --- |
+| Build command | `npm run build:pages` |
+| Build output directory | `dist` |
+| Root directory | Boş bırakın (depo kökü) |
+
+Bu değişiklikleri GitHub'a gönderdikten sonra yeni bir production deployment
+başlatın. Kökteki `index.html` geliştirme girişidir; depo kökünü doğrudan
+yayınlamak `.tsx` MIME hatasına ve boş ekrana neden olur. Pages'e yalnızca
+derlenmiş `dist` çıktısı sunulmalıdır.
+
+`npm run build:pages`, HTML ve JavaScript/CSS dosyalarını `dist` içine üretir.
+Depo kökündeki `functions/api/weather.js`, Pages Functions tarafından
+`/api/weather` adresinde çalıştırılır ve wttr.in yanıtını arayüzün beklediği
+JSON'a dönüştürür. Pages yayını için ayrıca bir Flask sunucusu gerekmez.
+`public/_routes.json`, Functions çağrılarını `/api/*` yollarıyla sınırlar.
+Pages'in varsayılan SPA davranışı `/hava?sehir=İstanbul` bağlantılarını da açar.
+
+Yerelde `npm run dev` ile Flask API'sini kullanmaya devam edebilirsiniz.
+`npm run build` komutu Flask için `havadurumu/static/react` çıktısını üretir;
+Pages için mutlaka `npm run build:pages` kullanın. `vite preview` yalnızca
+statik arayüzü sunar, Pages Functions çalıştırmaz.
+
 ## Test ve doğrulama
 
 ```powershell
 npm run check
 npm run build
+npm run build:pages
+npm run test:pages
 uv run python -m unittest discover -v
 ```
 

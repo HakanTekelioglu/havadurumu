@@ -155,9 +155,14 @@ export function App({ initialState }: AppProps) {
       }
     };
 
+    // Pages serves the static shell for /hava; Flask supplies this state itself.
+    if (initialState.view === "landing" && window.location.pathname === "/hava") {
+      handlePopState();
+    }
+
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [fetchWeather]);
+  }, [fetchWeather, initialState.view]);
 
   useEffect(() => {
     document.documentElement.dataset.weather = mood;
