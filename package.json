@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "start": "npm run build && uv run python -B -m flask --app app run --host 127.0.0.1 --port 5000",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:pages": "tsc -b && vite build --mode pages",
@@ -12,6 +13,7 @@
     "check": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@radix-ui/react-tabs": "^1.2.1",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

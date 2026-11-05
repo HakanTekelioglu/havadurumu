@@ -1,760 +1,417 @@
 import {
-  ArrowRight,
-  CloudSun,
-  Compass,
-  Droplets,
-  Eye,
-  Gauge,
-  LocateFixed,
-  MapPin,
-  Menu,
-  Moon,
-  Search,
-  Sparkles,
-  Sun,
-  Wind,
-  X,
+  ArrowDown, ArrowRight, ArrowUp, CalendarDays, Check, ChevronRight,
+  Clock3, CloudOff, CloudSun, Compass, Droplets, Eye, Gauge, Globe2,
+  LayoutDashboard, LoaderCircle, MapPin, Moon, RefreshCw, Search,
+  SlidersHorizontal, Sun, Thermometer, Wind, X,
 } from "lucide-react";
 import {
-  type FormEvent,
-  type KeyboardEvent,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
+  type FormEvent, type RefObject, useCallback, useEffect, useLayoutEffect,
+  useRef, useState,
 } from "react";
 import type { InitialState, TemperatureUnit, WeatherReport } from "./types";
 import {
-  formatForecastDate,
-  formatTemperature,
-  formatToday,
-  getWeatherIcon,
-  getWeatherMood,
+  formatForecastDate, formatTemperature, formatToday, getWeatherIcon, getWeatherMood,
 } from "./weather";
-
-type AppProps = {
-  initialState: InitialState;
-};
+import { Badge, Button, Card, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "./ui";
 
 type ColorTheme = "light" | "dark";
-
 const POPULAR_CITIES = [
-  "İstanbul",
-  "Ankara",
-  "İzmir",
-  "Antalya",
-  "Londra",
-  "Paris",
-  "New York",
-  "Tokyo",
+  { name: "İstanbul", region: "Marmara Bölgesi", color: "mint", Icon: CloudSun },
+  { name: "Ankara", region: "İç Anadolu Bölgesi", color: "sand", Icon: Sun },
+  { name: "İzmir", region: "Ege Bölgesi", color: "blue", Icon: Wind },
+  { name: "Antalya", region: "Akdeniz Bölgesi", color: "peach", Icon: Sun },
 ];
 
-const getStoredUnit = (): TemperatureUnit => {
-  const value = localStorage.getItem("atmos-temperature-unit");
-  return value === "f" ? "f" : "c";
-};
+function readStorage(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
 
-const getStoredTheme = (): ColorTheme => {
-  const value = localStorage.getItem("atmos-color-theme");
-  if (value === "light" || value === "dark") {
-    return value;
-  }
+function writeStorage(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* Preferences remain usable in memory. */ }
+}
 
-  return window.matchMedia("(prefers-color-scheme: light)").matches
-    ? "light"
-    : "dark";
-};
-
-const getRecentCities = (): string[] => {
+function getRecentCities(): string[] {
   try {
-    const value = JSON.parse(localStorage.getItem("atmos-recent-cities") ?? "[]");
-    return Array.isArray(value) ? value.slice(0, 4) : [];
-  } catch {
-    return [];
-  }
-};
+    const value: unknown = JSON.parse(readStorage("atmos-recent-cities") ?? "[]");
+    return Array.isArray(value)
+      ? value.filter((city): city is string => typeof city === "string" && !!city.trim()).slice(0, 4)
+      : [];
+  } catch { return []; }
+}
 
-export function App({ initialState }: AppProps) {
+export function App({ initialState }: { initialState: InitialState }) {
   const [view, setView] = useState(initialState.view);
   const [query, setQuery] = useState(initialState.query);
   const [report, setReport] = useState<WeatherReport | null>(initialState.report);
   const [error, setError] = useState<string | null>(initialState.error);
   const [loading, setLoading] = useState(false);
-  const [unit, setUnit] = useState<TemperatureUnit>(getStoredUnit);
-  const [theme, setTheme] = useState<ColorTheme>(getStoredTheme);
-  const [recentCities, setRecentCities] = useState<string[]>(getRecentCities);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unit, setUnit] = useState<TemperatureUnit>(() => readStorage("atmos-temperature-unit") === "f" ? "f" : "c");
+  const [theme, setTheme] = useState<ColorTheme>(() => {
+    const saved = readStorage("atmos-color-theme");
+    return saved === "light" || saved === "dark" ? saved
+      : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+  const [recentCities, setRecentCities] = useState(getRecentCities);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
+  const requestRef = useRef<AbortController | null>(null);
   const mood = getWeatherMood(report?.current.description);
-  const WeatherIcon = getWeatherIcon(report?.current.description);
 
   const fetchWeather = useCallback(async (city: string, updateHistory = true) => {
     const cleanedCity = city.trim();
     if (!cleanedCity) {
-      setError("Lütfen bir şehir adı girin.");
+      setError("Hava durumunu görmek için bir şehir adı yaz.");
+      searchInputRef.current?.focus();
       return;
     }
 
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
     setError(null);
+    setQuery(cleanedCity);
+    setView("weather");
+    setReport((previous) => previous?.current.city.toLocaleLowerCase("tr-TR") === cleanedCity.toLocaleLowerCase("tr-TR") ? previous : null);
+    if (updateHistory) {
+      window.history.pushState({ city: cleanedCity }, "", `/hava?sehir=${encodeURIComponent(cleanedCity)}`);
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
 
     try {
-      const response = await fetch(
-        `/api/weather?sehir=${encodeURIComponent(cleanedCity)}`,
-        { headers: { Accept: "application/json" } },
-      );
-      const payload = (await response.json()) as WeatherReport & { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Hava durumu bilgisi alınamadı.");
-      }
-
+      const response = await fetch(`/api/weather?sehir=${encodeURIComponent(cleanedCity)}`, {
+        headers: { Accept: "application/json" }, signal: controller.signal,
+      });
+      const payload = await response.json() as WeatherReport & { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Hava durumu bilgisi alınamadı.");
+      if (controller.signal.aborted) return;
       setReport(payload);
-      setView("weather");
       setQuery(payload.current.city);
-
-      const nextRecent = [
-        payload.current.city,
-        ...getRecentCities().filter((item) => item !== payload.current.city),
-      ].slice(0, 4);
-      localStorage.setItem("atmos-recent-cities", JSON.stringify(nextRecent));
-      setRecentCities(nextRecent);
-
-      if (updateHistory) {
-        const url = `/hava?sehir=${encodeURIComponent(cleanedCity)}`;
-        window.history.pushState({ city: cleanedCity }, "", url);
-      }
+      setRecentCities((previous) => {
+        const next = [payload.current.city, ...previous.filter(
+          (item) => item.toLocaleLowerCase("tr-TR") !== payload.current.city.toLocaleLowerCase("tr-TR"),
+        )].slice(0, 4);
+        writeStorage("atmos-recent-cities", JSON.stringify(next));
+        return next;
+      });
     } catch (requestError) {
-      setView("weather");
+      if (controller.signal.aborted) return;
       setReport(null);
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Beklenmeyen bir hata oluştu.",
-      );
+      setError(requestError instanceof Error ? requestError.message : "Beklenmeyen bir hata oluştu.");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
+  }, []);
+
+  const goHome = useCallback((updateHistory = true) => {
+    requestRef.current?.abort();
+    if (updateHistory) window.history.pushState({}, "", "/");
+    setView("landing");
+    setReport(null);
+    setError(null);
+    setQuery("");
+    setLoading(false);
+    window.scrollTo({ top: 0, behavior: "instant" });
   }, []);
 
   useEffect(() => {
     const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const city = params.get("sehir");
-      if (city) {
-        void fetchWeather(city, false);
-      } else {
-        setView("landing");
-        setReport(null);
-        setError(null);
-        setQuery("");
-      }
+      const city = new URLSearchParams(window.location.search).get("sehir");
+      if (city) void fetchWeather(city, false);
+      else goHome(false);
     };
-
-    // Pages serves the static shell for /hava; Flask supplies this state itself.
     if (initialState.view === "landing" && window.location.pathname === "/hava") {
-      handlePopState();
+      const city = new URLSearchParams(window.location.search).get("sehir") ?? "İstanbul";
+      void fetchWeather(city, false);
     }
-
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [fetchWeather, initialState.view]);
-
-  useEffect(() => {
-    document.documentElement.dataset.weather = mood;
-  }, [mood]);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      requestRef.current?.abort();
+    };
+  }, [fetchWeather, goHome, initialState.view]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    document.documentElement.dataset.weather = mood;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#141c19" : "#f7f9f7");
+  }, [theme, mood]);
+
+  useEffect(() => {
+    document.title = report && view === "weather"
+      ? `${report.current.city} ${formatTemperature(report.current.temperature_c, unit)} — Atmos`
+      : "Atmos — Hava Durumu";
+  }, [report, unit, view]);
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(target.tagName))) return;
+      if (event.key === "/" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k")) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void fetchWeather(query);
   };
-
-  const goHome = () => {
-    window.history.pushState({}, "", "/");
-    setView("landing");
-    setReport(null);
-    setError(null);
-    setQuery("");
-    setMobileMenuOpen(false);
+  const changeUnit = (next: TemperatureUnit) => {
+    setUnit(next);
+    writeStorage("atmos-temperature-unit", next);
   };
-
-  const changeUnit = (nextUnit: TemperatureUnit) => {
-    localStorage.setItem("atmos-temperature-unit", nextUnit);
-    setUnit(nextUnit);
-  };
-
   const toggleTheme = () => {
-    setTheme((currentTheme) => {
-      const nextTheme = currentTheme === "dark" ? "light" : "dark";
-      localStorage.setItem("atmos-color-theme", nextTheme);
-      return nextTheme;
-    });
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    writeStorage("atmos-color-theme", next);
   };
-
-  const focusSearch = () => {
-    setMobileMenuOpen(false);
-    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  const searchProps = {
+    query, onQueryChange: setQuery, onSubmit: handleSearch,
+    inputRef: searchInputRef, loading, error: view === "landing" ? error : null,
   };
 
   return (
-    <div className={`app app--${mood}`}>
-      <Atmosphere mood={mood} />
-      <Header
-        unit={unit}
-        theme={theme}
-        onUnitChange={changeUnit}
-        onThemeToggle={toggleTheme}
-        onHome={goHome}
-        onSearch={focusSearch}
-        mobileMenuOpen={mobileMenuOpen}
-        onMobileMenuChange={setMobileMenuOpen}
-      />
-
-      <main className="page-shell">
-        {view === "landing" ? (
-          <LandingView
-            query={query}
-            onQueryChange={setQuery}
-            onSubmit={handleSearch}
-            onCitySelect={fetchWeather}
-            recentCities={recentCities}
-            inputRef={searchInputRef}
-            loading={loading}
-          />
-        ) : (
-          <WeatherView
-            report={report}
-            error={error}
-            query={query}
-            onQueryChange={setQuery}
-            onSubmit={handleSearch}
-            inputRef={searchInputRef}
-            unit={unit}
-            WeatherIcon={WeatherIcon}
-            loading={loading}
-            onRetry={() => void fetchWeather(query)}
-          />
-        )}
-      </main>
-
-      <Footer />
+    <div className="app">
+      <a className="skip-link" href="#main-content">İçeriğe geç</a>
+      <Sidebar view={view} recentCities={recentCities} currentCity={report?.current.city ?? (view === "weather" ? query : undefined)}
+        onHome={() => goHome()} onSearch={() => searchInputRef.current?.focus()}
+        onCitySelect={(city) => void fetchWeather(city)} />
+      <div className="workspace">
+        <header className="topbar">
+          <div className="breadcrumb"><span>Çalışma alanın</span><ChevronRight size={14} /><strong>{view === "landing" ? "Genel bakış" : "Hava durumu"}</strong></div>
+          <div className="topbar-actions">
+            <span className="topbar-date"><CalendarDays size={15} />{formatToday()}</span>
+            <div className="unit-toggle" role="group" aria-label="Sıcaklık birimi">
+              {(["c", "f"] as const).map((value) => (
+                <button key={value} type="button" onClick={() => changeUnit(value)} aria-pressed={unit === value}>°{value.toUpperCase()}</button>
+              ))}
+            </div>
+            <Button variant="outline" size="icon" onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"}
+              title={theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"}>
+              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+            </Button>
+          </div>
+        </header>
+        <main id="main-content" className="page-shell" tabIndex={-1}>
+          {view === "landing" ? (
+            <LandingView searchProps={searchProps} recentCities={recentCities} onCitySelect={(city) => void fetchWeather(city)} />
+          ) : (
+            <WeatherView report={report} error={error} searchProps={searchProps} unit={unit}
+              onRetry={() => void fetchWeather(query, false)} onHome={() => goHome()} />
+          )}
+        </main>
+        <footer className="site-footer"><span>Bir bakışta hava. Bir adım önde sen.</span><a href="https://wttr.in" target="_blank" rel="noreferrer">Hava verileri: wttr.in <ArrowRight size={13} /></a></footer>
+      </div>
     </div>
   );
 }
 
-function Atmosphere({ mood }: { mood: string }) {
+function Sidebar({ view, recentCities, currentCity, onHome, onSearch, onCitySelect }: {
+  view: InitialState["view"]; recentCities: string[]; currentCity?: string;
+  onHome: () => void; onSearch: () => void; onCitySelect: (city: string) => void;
+}) {
   return (
-    <div className="atmosphere" aria-hidden="true">
-      <div className="orb orb--one" />
-      <div className="orb orb--two" />
-      <div className="orb orb--three" />
-      <div className="grain" />
-      <span className="atmosphere__label">{mood}</span>
-    </div>
-  );
-}
-
-type HeaderProps = {
-  unit: TemperatureUnit;
-  theme: ColorTheme;
-  onUnitChange: (unit: TemperatureUnit) => void;
-  onThemeToggle: () => void;
-  onHome: () => void;
-  onSearch: () => void;
-  mobileMenuOpen: boolean;
-  onMobileMenuChange: (open: boolean) => void;
-};
-
-function Header({
-  unit,
-  theme,
-  onUnitChange,
-  onThemeToggle,
-  onHome,
-  onSearch,
-  mobileMenuOpen,
-  onMobileMenuChange,
-}: HeaderProps) {
-  return (
-    <header className="site-header">
-      <div className="header-inner">
-        <button className="brand" onClick={onHome} aria-label="Atmos ana sayfa">
-          <span className="brand__mark"><CloudSun size={22} strokeWidth={2.2} /></span>
-          <span>ATMOS</span>
-        </button>
-
-        <nav className={`header-actions ${mobileMenuOpen ? "is-open" : ""}`} aria-label="Ana menü">
-          <button className="nav-link" onClick={onHome}>Ana sayfa</button>
-          <button className="nav-link" onClick={onSearch}>Şehir ara</button>
-          <button
-            className="theme-toggle"
-            type="button"
-            onClick={onThemeToggle}
-            aria-pressed={theme === "light"}
-            aria-label={theme === "dark" ? "Açık temaya geç" : "Koyu temaya geç"}
-            title={theme === "dark" ? "Açık tema" : "Koyu tema"}
-          >
-            {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
-          <div className="unit-toggle" role="group" aria-label="Sıcaklık birimi">
-            <button
-              className={unit === "c" ? "is-active" : ""}
-              onClick={() => onUnitChange("c")}
-              aria-pressed={unit === "c"}
-            >
-              °C
-            </button>
-            <button
-              className={unit === "f" ? "is-active" : ""}
-              onClick={() => onUnitChange("f")}
-              aria-pressed={unit === "f"}
-            >
-              °F
-            </button>
-          </div>
-        </nav>
-
-        <button
-          className="menu-button"
-          onClick={() => onMobileMenuChange(!mobileMenuOpen)}
-          aria-expanded={mobileMenuOpen}
-          aria-label={mobileMenuOpen ? "Menüyü kapat" : "Menüyü aç"}
-        >
-          {mobileMenuOpen ? <X /> : <Menu />}
-        </button>
+    <aside className="sidebar" aria-label="Gezinme">
+      <button className="brand" onClick={onHome} aria-label="Atmos ana sayfa">
+        <span className="brand-mark"><CloudSun size={25} strokeWidth={1.8} /></span>
+        <span>atmos<span className="brand-dot">.</span></span>
+      </button>
+      <p className="brand-caption">Hava, bir bakışta.</p>
+      <nav className="primary-nav" aria-label="Ana menü">
+        <span className="sidebar-label">KEŞFET</span>
+        <button className={`nav-item ${view === "landing" ? "is-active" : ""}`} onClick={onHome} aria-label="Genel bakış" aria-current={view === "landing" ? "page" : undefined}><LayoutDashboard size={18} />Genel bakış</button>
+        <button className="nav-item" onClick={onSearch} aria-label="Şehir ara"><Search size={18} />Şehir ara<kbd>/</kbd></button>
+        {view === "weather" && <div className="nav-item is-active current-location"><MapPin size={18} /><span>{currentCity || "Hava durumu"}</span></div>}
+      </nav>
+      <div className="sidebar-cities">
+        <span className="sidebar-label">SON ARAMALAR</span>
+        {recentCities.length ? recentCities.map((city) => (
+          <button className="nav-item" key={city} onClick={() => onCitySelect(city)}><Clock3 size={16} /><span>{city}</span><ChevronRight size={14} /></button>
+        )) : <p className="sidebar-empty">Aradığın şehirler burada.<br />Bir sonraki bakışın daha kolay.</p>}
       </div>
-    </header>
-  );
-}
-
-type LandingProps = {
-  query: string;
-  onQueryChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onCitySelect: (city: string) => Promise<void>;
-  recentCities: string[];
-  inputRef: RefObject<HTMLInputElement | null>;
-  loading: boolean;
-};
-
-function LandingView({
-  query,
-  onQueryChange,
-  onSubmit,
-  onCitySelect,
-  recentCities,
-  inputRef,
-  loading,
-}: LandingProps) {
-  const cities = recentCities.length
-    ? [...new Set([...recentCities, ...POPULAR_CITIES])].slice(0, 8)
-    : POPULAR_CITIES;
-
-  return (
-    <section className="landing">
-      <div className="landing__copy">
-        <div className="eyebrow">
-          <Sparkles size={15} />
-          <span>Havanın ritmini yakala</span>
-        </div>
-        <h1>
-          Gününü gökyüzüne
-          <span> göre planla.</span>
-        </h1>
-        <p className="landing__lead">
-          Dünyanın her yerinden anlık hava durumu ve üç günlük öngörü.
-          Sade, hızlı ve tam ihtiyacın kadar.
-        </p>
-
-        <SearchForm
-          query={query}
-          onQueryChange={onQueryChange}
-          onSubmit={onSubmit}
-          inputRef={inputRef}
-          loading={loading}
-          large
-        />
-
-        <div className="city-list" aria-label="Popüler şehirler">
-          <span>{recentCities.length ? "Son aramalar" : "Hızlı seçim"}</span>
-          <div>
-            {cities.map((city) => (
-              <button key={city} onClick={() => void onCitySelect(city)}>
-                {city}
-                <ArrowRight size={14} />
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="sidebar-bottom">
+        <div className="sidebar-note"><span className="sidebar-note-icon"><Globe2 size={22} /></span><strong>Dünya kadar yakın.</strong><p>Bulunduğun yerin ya da bir sonraki durağının havasını keşfet.</p></div>
+        <div className="sidebar-signature"><span className="status-dot" />Her güne hazırlıklı.</div>
       </div>
-
-      <div className="landing__visual" aria-label="Atmos hava durumu özeti">
-        <div className="date-pill">
-          <span>Bugün</span>
-          <strong>{formatToday()}</strong>
-        </div>
-        <div className="weather-orbit">
-          <div className="sun-disc">
-            <CloudSun size={118} strokeWidth={1.15} />
-          </div>
-          <div className="orbit-line orbit-line--one" />
-          <div className="orbit-line orbit-line--two" />
-          <div className="floating-note floating-note--top">
-            <span className="status-dot" />
-            Canlı veriler
-          </div>
-          <div className="floating-note floating-note--bottom">
-            <LocateFixed size={16} />
-            Dünya çapında
-          </div>
-        </div>
-        <p className="visual-caption">Bak. Anla. Hazırlan.</p>
-      </div>
-    </section>
+    </aside>
   );
 }
 
 type SearchFormProps = {
-  query: string;
-  onQueryChange: (value: string) => void;
+  query: string; onQueryChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  inputRef: RefObject<HTMLInputElement | null>;
-  loading: boolean;
-  large?: boolean;
+  inputRef: RefObject<HTMLInputElement | null>; loading: boolean;
+  error?: string | null; large?: boolean;
 };
 
-function SearchForm({
-  query,
-  onQueryChange,
-  onSubmit,
-  inputRef,
-  loading,
-  large = false,
-}: SearchFormProps) {
+function SearchForm({ query, onQueryChange, onSubmit, inputRef, loading, error, large }: SearchFormProps) {
   return (
-    <form className={`search ${large ? "search--large" : ""}`} onSubmit={onSubmit}>
-      <Search size={21} aria-hidden="true" />
-      <label className="sr-only" htmlFor={large ? "hero-search" : "weather-search"}>
-        Şehir adı
-      </label>
-      <input
-        ref={inputRef}
-        id={large ? "hero-search" : "weather-search"}
-        value={query}
-        onChange={(event) => onQueryChange(event.target.value)}
-        placeholder="Şehir veya bölge ara"
-        maxLength={100}
-        autoComplete="address-level2"
-        disabled={loading}
-      />
-      <button type="submit" disabled={loading} aria-label="Hava durumunu ara">
-        {loading ? <span className="button-spinner" /> : <ArrowRight size={21} />}
-      </button>
-    </form>
-  );
-}
-
-type WeatherViewProps = {
-  report: WeatherReport | null;
-  error: string | null;
-  query: string;
-  onQueryChange: (value: string) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  inputRef: RefObject<HTMLInputElement | null>;
-  unit: TemperatureUnit;
-  WeatherIcon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  loading: boolean;
-  onRetry: () => void;
-};
-
-function WeatherView({
-  report,
-  error,
-  query,
-  onQueryChange,
-  onSubmit,
-  inputRef,
-  unit,
-  WeatherIcon,
-  loading,
-  onRetry,
-}: WeatherViewProps) {
-  if (loading && !report) return <WeatherSkeleton />;
-
-  if (error || !report) {
-    return (
-      <section className="error-view">
-        <SearchForm
-          query={query}
-          onQueryChange={onQueryChange}
-          onSubmit={onSubmit}
-          inputRef={inputRef}
-          loading={loading}
-        />
-        <div className="error-card" role="alert">
-          <div className="error-card__icon"><CloudSun size={44} /></div>
-          <span>Gökyüzü sessiz kaldı</span>
-          <h1>{error ?? "Hava durumu bulunamadı."}</h1>
-          <p>Şehir adını kontrol edebilir veya birkaç saniye sonra yeniden deneyebilirsin.</p>
-          <button onClick={onRetry}>Yeniden dene <ArrowRight size={17} /></button>
-        </div>
-      </section>
-    );
-  }
-
-  const current = report.current;
-  const firstForecast = report.forecasts[0];
-
-  return (
-    <section className="weather-dashboard" aria-busy={loading}>
-      <div className="dashboard-toolbar">
-        <div>
-          <p>{formatToday()}</p>
-          <h1><MapPin size={20} /> {current.city}, {current.country}</h1>
-        </div>
-        <SearchForm
-          query={query}
-          onQueryChange={onQueryChange}
-          onSubmit={onSubmit}
-          inputRef={inputRef}
-          loading={loading}
-        />
-      </div>
-
-      <div className="dashboard-grid">
-        <article className="current-card glass-card">
-          <div className="current-card__top">
-            <div>
-              <span className="card-label">Şu an</span>
-              <div className="current-temperature">
-                {formatTemperature(current.temperature_c, unit)}
-                <small>{unit.toUpperCase()}</small>
-              </div>
-              <p>{current.description}</p>
-            </div>
-            <div className="current-icon">
-              <WeatherIcon size={132} strokeWidth={1.15} />
-              <span className="icon-glow" />
-            </div>
-          </div>
-          <div className="temperature-range">
-            <span>Hissedilen {formatTemperature(current.feels_like_c, unit)}</span>
-            {firstForecast && (
-              <span>
-                ↑ {formatTemperature(firstForecast.max_temperature_c, unit)}
-                <i />
-                ↓ {formatTemperature(firstForecast.min_temperature_c, unit)}
-              </span>
-            )}
-          </div>
-        </article>
-
-        <MetricsGrid report={report} unit={unit} />
-      </div>
-
-      <ForecastSection report={report} unit={unit} />
-      {loading && <div className="refresh-indicator">Veriler yenileniyor…</div>}
-    </section>
-  );
-}
-
-function MetricsGrid({
-  report,
-  unit,
-}: {
-  report: WeatherReport;
-  unit: TemperatureUnit;
-}) {
-  const current = report.current;
-  const metrics = [
-    {
-      label: "Nem",
-      value: `%${current.humidity_percent}`,
-      detail: current.humidity_percent > 70 ? "Yüksek" : "Dengeli",
-      Icon: Droplets,
-    },
-    {
-      label: "Rüzgâr",
-      value: `${current.wind_speed_kmph}`,
-      suffix: "km/sa",
-      detail: current.wind_direction,
-      Icon: Wind,
-    },
-    {
-      label: "Basınç",
-      value: `${current.pressure_hpa}`,
-      suffix: "hPa",
-      detail: current.pressure_hpa > 1013 ? "Yükseliyor" : "Normal",
-      Icon: Gauge,
-    },
-    {
-      label: "Görüş",
-      value: `${current.visibility_km}`,
-      suffix: "km",
-      detail: current.visibility_km >= 10 ? "Çok iyi" : "Sınırlı",
-      Icon: Eye,
-    },
-    {
-      label: "Rüzgâr yönü",
-      value: current.wind_direction,
-      detail: "Pusula",
-      Icon: Compass,
-    },
-    {
-      label: "Hissedilen",
-      value: formatTemperature(current.feels_like_c, unit),
-      detail: "Dış ortam",
-      Icon: CloudSun,
-    },
-  ];
-
-  return (
-    <div className="metrics-grid">
-      {metrics.map(({ label, value, suffix, detail, Icon }) => (
-        <article className="metric-card glass-card" key={label}>
-          <div className="metric-card__heading">
-            <span>{label}</span>
-            <Icon size={18} />
-          </div>
-          <strong>
-            {value}
-            {suffix && <small>{suffix}</small>}
-          </strong>
-          <p>{detail}</p>
-        </article>
-      ))}
+    <div className={`search-wrapper ${large ? "search-wrapper--large" : ""}`}>
+      <form className="search" role="search" onSubmit={onSubmit} aria-label="Şehir hava durumu">
+        <Search size={20} aria-hidden="true" />
+        <label htmlFor="city-search" className="sr-only">Şehir adı</label>
+        <input ref={inputRef} id="city-search" value={query} onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="Bir şehir ara…" maxLength={100} autoComplete="off" spellCheck={false}
+          aria-invalid={!!error} aria-describedby={error ? "search-error" : undefined} />
+        {query && <button type="button" className="search-clear" aria-label="Aramayı temizle" onClick={() => { onQueryChange(""); inputRef.current?.focus(); }}><X size={16} /></button>}
+        <Button type="submit" disabled={loading || !query.trim()} aria-label="Hava durumunu ara">
+          {loading ? <LoaderCircle size={18} className="spin" /> : <><span className="search-button-label">Havayı keşfet</span><ArrowRight size={18} /></>}
+        </Button>
+      </form>
+      {error && <p id="search-error" className="search-error" role="alert">{error}</p>}
     </div>
   );
 }
 
-function ForecastSection({
-  report,
-  unit,
-}: {
-  report: WeatherReport;
-  unit: TemperatureUnit;
+function LandingView({ searchProps, recentCities, onCitySelect }: {
+  searchProps: SearchFormProps; recentCities: string[]; onCitySelect: (city: string) => void;
 }) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const days = report.forecasts;
-  const selected = days[selectedIndex] ?? days[0];
-  const SelectedIcon = getWeatherIcon(selected?.description);
-  const maxTemp = useMemo(
-    () => Math.max(...days.map((day) => day.max_temperature_c), 1),
-    [days],
+  return (
+    <div className="landing page-enter">
+      <div className="page-intro"><div><p className="overline">KÜÇÜK BİR BAKIŞ, DAHA İYİ BİR GÜN</p><h1>Merhaba, gökyüzü meraklısı<span className="greeting-dot">.</span></h1></div><Badge variant="outline"><span className="status-dot" />Günün için buradayız</Badge></div>
+      <section className="hero" aria-labelledby="hero-heading">
+        <div className="hero-copy">
+          <Badge><CloudSun size={14} />Havanın ritmini yakala</Badge>
+          <h2 id="hero-heading">Güzel bir gün,<br /><span>iyi bir planla başlar.</span></h2>
+          <p>Şehrinin havasını öğren, önündeki günleri keşfet.<br className="desktop-break" /> Dışarıdaki dünya için ihtiyacın olan her şey, bir bakışta.</p>
+          <SearchForm {...searchProps} large />
+          <div className="search-hint"><Globe2 size={14} /><span>İstanbul’dan Tokyo’ya, dünyanın her yerinde.</span></div>
+        </div>
+        <SkyScene />
+      </section>
+      {recentCities.length > 0 && <div className="recent-chips"><span><Clock3 size={14} />Son baktıkların</span>{recentCities.map((city) => <Button key={city} variant="outline" size="sm" onClick={() => onCitySelect(city)}>{city}<ArrowRight size={13} /></Button>)}</div>}
+      <section className="cities-section" aria-labelledby="cities-heading">
+        <div className="section-heading"><div><h2 id="cities-heading">Bir şehir seç, keşfe başla</h2><p>Bir sonraki durağında hava nasıl?</p></div><span className="section-caption"><MapPin size={14} />Popüler şehirler</span></div>
+        <div className="city-grid">
+          {POPULAR_CITIES.map(({ name, region, color, Icon }, index) => (
+            <button className={`city-card city-card--${color}`} key={name} onClick={() => onCitySelect(name)}>
+              <div className="city-card-top"><span className="city-number">0{index + 1}</span><Icon size={37} strokeWidth={1.2} /></div>
+              <div className="city-card-bottom"><div><strong>{name}</strong><span>{region}</span></div><span className="city-arrow"><ArrowRight size={17} /></span></div>
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="features" aria-label="Atmos ile neler yapabilirsin?">
+        {[
+          { Icon: Globe2, title: "Sınırları aşan hava bilgisi", description: "Dünyanın dört bir yanındaki şehirleri keşfet." },
+          { Icon: CalendarDays, title: "Bugünü bil, yarına hazırlan", description: "Üç günlük tahminle planlarına yön ver." },
+          { Icon: SlidersHorizontal, title: "Tam senin havanda", description: "Açık veya koyu tema, Celsius veya Fahrenheit." },
+        ].map(({ Icon, title, description }) => <div className="feature" key={title}><span className="feature-icon"><Icon size={20} strokeWidth={1.6} /></span><div><h3>{title}</h3><p>{description}</p></div></div>)}
+      </section>
+    </div>
   );
+}
 
-  const handleDayKey = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    index: number,
-  ) => {
-    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-    event.preventDefault();
-    const direction = event.key === "ArrowRight" ? 1 : -1;
-    setSelectedIndex((index + direction + days.length) % days.length);
-  };
+function SkyScene() {
+  return (
+    <div className="sky-scene" aria-hidden="true">
+      <div className="scene-header"><span>DIŞARIDA BİR DÜNYA VAR</span><span className="scene-cross">+</span></div>
+      <div className="scene-art"><div className="scene-orbit scene-orbit--outer" /><div className="scene-orbit scene-orbit--inner" /><div className="scene-sun" /><div className="scene-cloud scene-cloud--back" /><div className="scene-cloud scene-cloud--front" /><span className="scene-spark scene-spark--one">✳</span><span className="scene-spark scene-spark--two">+</span></div>
+      <div className="scene-footer"><div>Nereye gidersen,<br /><strong>hazırlıklı git.</strong></div><span><Compass size={23} strokeWidth={1.3} /></span></div>
+    </div>
+  );
+}
 
-  if (!days.length) return null;
+function WeatherView({ report, error, searchProps, unit, onRetry, onHome }: {
+  report: WeatherReport | null; error: string | null; searchProps: SearchFormProps;
+  unit: TemperatureUnit; onRetry: () => void; onHome: () => void;
+}) {
+  const loading = searchProps.loading;
+  return (
+    <div className="weather-dashboard page-enter" aria-busy={loading}>
+      <div className="dashboard-toolbar">
+        <div><p className="overline">GÜNÜNÜ PLANLAMAYA BURADAN BAŞLA</p><h1>{report && !error ? <><MapPin size={23} />{report.current.city}<span className="country">{report.current.country}</span></> : "Şehrinin hava durumu"}</h1></div>
+        <SearchForm {...searchProps} />
+      </div>
+      {loading && !report ? <WeatherSkeleton /> : error || !report ? (
+        <Card className="error-card" role="alert">
+          <span className="error-icon"><CloudOff size={36} strokeWidth={1.4} /></span>
+          <Badge variant="outline">Küçük bir bulut çıktı</Badge>
+          <h2>Hava bilgisine ulaşamadık.</h2><p>{error || "Bu şehir için hava durumu bulunamadı."}</p>
+          <p className="error-hint">Şehir adını kontrol et veya biraz sonra tekrar dene.</p>
+          <div className="error-actions"><Button onClick={onRetry}><RefreshCw size={16} />Yeniden dene</Button><Button variant="outline" onClick={onHome}>Ana sayfaya dön</Button></div>
+        </Card>
+      ) : <>
+        <div className="report-meta"><Badge><span className="status-dot" />Güncel hava durumu</Badge><Button variant="ghost" size="sm" disabled={loading} onClick={onRetry}><RefreshCw size={14} className={loading ? "spin" : ""} />{loading ? "Yenileniyor…" : "Yenile"}</Button></div>
+        <div className="dashboard-grid"><CurrentWeatherCard report={report} unit={unit} /><MetricsGrid report={report} unit={unit} /></div>
+        <ForecastSection key={`${report.current.city}-${report.forecasts.map((day) => day.date).join()}`} report={report} unit={unit} />
+        <div className="weather-note"><span className="feature-icon"><Compass size={21} /></span><div><strong>Günün için küçük bir ipucu</strong><p>{getWeatherTip(report)}</p></div><Check size={19} /></div>
+      </>}
+      <span className="sr-only" role="status" aria-live="polite">{loading ? "Hava durumu yükleniyor." : report && !error ? `${report.current.city}: ${formatTemperature(report.current.temperature_c, unit)}, ${report.current.description}.` : ""}</span>
+    </div>
+  );
+}
 
+function CurrentWeatherCard({ report, unit }: { report: WeatherReport; unit: TemperatureUnit }) {
+  const current = report.current;
+  const first = report.forecasts[0];
+  const Icon = getWeatherIcon(current.description);
+  return (
+    <Card className={`current-card current-card--${getWeatherMood(current.description)}`}>
+      <div className="current-heading"><span><span className="status-dot" />ŞU AN</span><span>{formatToday()}</span></div>
+      <div className="current-main"><div><div className="current-temperature">{formatTemperature(current.temperature_c, unit)}<span>{unit.toUpperCase()}</span></div><h2>{current.description}</h2><p>Hissedilen {formatTemperature(current.feels_like_c, unit)}</p></div><div className="current-weather-art"><Icon size={104} strokeWidth={1.1} /></div></div>
+      <div className="current-bottom"><span><MapPin size={15} />{current.city}</span>{first && <div><span><ArrowUp size={15} />{formatTemperature(first.max_temperature_c, unit)}</span><span><ArrowDown size={15} />{formatTemperature(first.min_temperature_c, unit)}</span></div>}</div>
+    </Card>
+  );
+}
+
+function MetricsGrid({ report, unit }: { report: WeatherReport; unit: TemperatureUnit }) {
+  const current = report.current;
+  const metrics = [
+    { label: "Nem oranı", value: current.humidity_percent, suffix: "%", detail: current.humidity_percent > 70 ? "Yüksek nem" : current.humidity_percent < 30 ? "Düşük nem" : "Dengeli nem", Icon: Droplets, color: "blue", progress: current.humidity_percent },
+    { label: "Rüzgâr hızı", value: current.wind_speed_kmph, suffix: "km/sa", detail: current.wind_speed_kmph > 40 ? "Kuvvetli rüzgâr" : current.wind_speed_kmph > 15 ? "Orta şiddette" : "Hafif esinti", Icon: Wind, color: "mint" },
+    { label: "Hissedilen", value: formatTemperature(current.feels_like_c, unit), suffix: unit.toUpperCase(), detail: "Algılanan sıcaklık", Icon: Thermometer, color: "peach" },
+    { label: "Görüş mesafesi", value: current.visibility_km, suffix: "km", detail: current.visibility_km >= 10 ? "Açık görüş" : "Sınırlı görüş", Icon: Eye, color: "mint" },
+    { label: "Hava basıncı", value: current.pressure_hpa, suffix: "hPa", detail: current.pressure_hpa > 1013 ? "Yüksek basınç" : current.pressure_hpa < 1000 ? "Düşük basınç" : "Normal aralık", Icon: Gauge, color: "sand" },
+    { label: "Rüzgâr yönü", value: current.wind_direction, detail: getWindDirection(current.wind_direction), Icon: Compass, color: "blue" },
+  ];
+  return <div className="metrics-grid">{metrics.map(({ label, value, suffix, detail, Icon, color, progress }) => (
+    <Card className="metric-card" key={label}><div className="metric-heading"><span>{label}</span><span className={`metric-icon metric-icon--${color}`}><Icon size={17} strokeWidth={1.7} /></span></div><strong>{value}{suffix && <small>{suffix}</small>}</strong><div className="metric-detail"><span>{detail}</span>{progress !== undefined && <span className="mini-meter" aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} /></span>}</div></Card>
+  ))}</div>;
+}
+
+function ForecastSection({ report, unit }: { report: WeatherReport; unit: TemperatureUnit }) {
+  const days = report.forecasts;
+  if (!days.length) return <Card className="empty-forecast"><CalendarDays size={22} /><p>Bu konum için günlük tahmin henüz bulunmuyor.</p></Card>;
+  const min = Math.min(...days.map((day) => day.min_temperature_c));
+  const max = Math.max(...days.map((day) => day.max_temperature_c));
+  const range = Math.max(1, max - min);
   return (
     <section className="forecast-section" aria-labelledby="forecast-heading">
-      <div className="section-heading">
-        <div>
-          <span>Önümüzdeki günler</span>
-          <h2 id="forecast-heading">3 günlük tahmin</h2>
-        </div>
-        <p>Günlük en yüksek ve en düşük değerler</p>
-      </div>
-
-      <div className="forecast-layout">
-        <div className="forecast-list" role="tablist" aria-label="Tahmin günleri">
+      <div className="section-heading"><div><h2 id="forecast-heading">Önümüzdeki günlere bir bakış</h2><p>{days.length} günlük tahminle planlarına yer aç.</p></div><span className="section-caption"><CalendarDays size={15} />Günlük tahmin</span></div>
+      <Tabs defaultValue={days[0].date}>
+        <TabsList className="forecast-tabs" aria-label="Tahmin günleri" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
           {days.map((day, index) => {
             const Icon = getWeatherIcon(day.description);
-            const active = index === selectedIndex;
-            return (
-              <button
-                role="tab"
-                aria-selected={active}
-                className={active ? "is-active" : ""}
-                key={day.date}
-                onClick={() => setSelectedIndex(index)}
-                onKeyDown={(event) => handleDayKey(event, index)}
-              >
-                <span className="forecast-day">
-                  <Icon size={27} />
-                  <span>
-                    <strong>{formatForecastDate(day.date, index)}</strong>
-                    <small>{day.description}</small>
-                  </span>
-                </span>
-                <span className="forecast-temp">
-                  <strong>{formatTemperature(day.max_temperature_c, unit)}</strong>
-                  <small>{formatTemperature(day.min_temperature_c, unit)}</small>
-                </span>
-              </button>
-            );
+            return <TabsTrigger className="forecast-tab" key={day.date} value={day.date}><div className="forecast-tab-top"><span>{formatForecastDate(day.date, index)}</span><span className="forecast-selected"><Check size={12} /></span></div><div className="forecast-tab-main"><Icon size={35} strokeWidth={1.5} /><div><strong>{formatTemperature(day.max_temperature_c, unit)}</strong><span>{formatTemperature(day.min_temperature_c, unit)}</span></div></div><span className="forecast-description">{day.description}</span><div className="temperature-track" aria-hidden="true"><span style={{ left: `${((day.min_temperature_c - min) / range) * 65}%`, width: `${Math.max(14, ((day.max_temperature_c - day.min_temperature_c) / range) * 100)}%` }} /></div></TabsTrigger>;
           })}
-        </div>
-
-        {selected && (
-          <article className="forecast-detail glass-card" role="tabpanel">
-            <div>
-              <span>{formatForecastDate(selected.date, selectedIndex)}</span>
-              <h3>{selected.description}</h3>
-            </div>
-            <SelectedIcon size={72} strokeWidth={1.3} />
-            <div className="temperature-bar" aria-hidden="true">
-              <span
-                style={{
-                  width: `${Math.max(36, (selected.max_temperature_c / maxTemp) * 100)}%`,
-                }}
-              />
-            </div>
-            <p>
-              Günün en yüksek sıcaklığı{" "}
-              <strong>{formatTemperature(selected.max_temperature_c, unit)}</strong>,
-              en düşük sıcaklığı{" "}
-              <strong>{formatTemperature(selected.min_temperature_c, unit)}</strong>.
-            </p>
-          </article>
-        )}
-      </div>
+        </TabsList>
+        {days.map((day, index) => <TabsContent className="forecast-detail" value={day.date} key={day.date}><CalendarDays size={17} /><p><strong>{formatForecastDate(day.date, index)}</strong> için beklenen hava: {day.description.toLocaleLowerCase("tr-TR")}. Sıcaklık <strong>{formatTemperature(day.min_temperature_c, unit)}</strong> ile <strong>{formatTemperature(day.max_temperature_c, unit)}</strong> arasında.</p></TabsContent>)}
+      </Tabs>
     </section>
   );
 }
 
 function WeatherSkeleton() {
-  return (
-    <section className="weather-skeleton" aria-label="Hava durumu yükleniyor" role="status">
-      <div className="skeleton skeleton--toolbar" />
-      <div className="skeleton-grid">
-        <div className="skeleton skeleton--hero" />
-        <div className="skeleton-cards">
-          {Array.from({ length: 6 }, (_, index) => (
-            <div className="skeleton skeleton--card" key={index} />
-          ))}
-        </div>
-      </div>
-      <span className="sr-only">Hava durumu yükleniyor</span>
-    </section>
-  );
+  return <div className="weather-skeleton" role="status" aria-label="Hava durumu yükleniyor"><div className="dashboard-grid"><Skeleton className="skeleton-current" /><div className="metrics-grid">{Array.from({ length: 6 }, (_, index) => <Skeleton className="skeleton-metric" key={index} />)}</div></div><Skeleton className="skeleton-heading" /><div className="skeleton-forecasts">{[0, 1, 2].map((index) => <Skeleton key={index} />)}</div><span className="sr-only">Hava durumu yükleniyor.</span></div>;
 }
 
-function Footer() {
-  return (
-    <footer className="site-footer">
-      <div>
-        <span>ATMOS</span>
-        <p>Hava verileri wttr.in üzerinden sağlanır.</p>
-      </div>
-      <p>Gökyüzü değişir. Planların hazır kalır.</p>
-    </footer>
-  );
+function getWindDirection(direction: string) {
+  const names: Record<string, string> = { N: "Kuzey", NNE: "Kuzey-kuzeydoğu", NE: "Kuzeydoğu", ENE: "Doğu-kuzeydoğu", E: "Doğu", ESE: "Doğu-güneydoğu", SE: "Güneydoğu", SSE: "Güney-güneydoğu", S: "Güney", SSW: "Güney-güneybatı", SW: "Güneybatı", WSW: "Batı-güneybatı", W: "Batı", WNW: "Batı-kuzeybatı", NW: "Kuzeybatı", NNW: "Kuzey-kuzeybatı" };
+  return names[direction.toUpperCase()] ?? "Pusula yönü";
+}
+
+function getWeatherTip(report: WeatherReport) {
+  const mood = getWeatherMood(report.current.description);
+  if (mood === "storm") return "Dışarı çıkmadan önce yerel hava uyarılarını kontrol etmek iyi bir fikir.";
+  if (mood === "rain") return "Çantanda küçük bir şemsiyeye yer aç. Yağmura hazırlıklı olmak günü kolaylaştırır.";
+  if (mood === "snow") return "Kalın bir katman ve rahat botlar, karlı bir güne güzel bir başlangıç.";
+  if (mood === "fog") return "Dışarıda görüş sınırlı olabilir. Yolculuğun için biraz daha zaman ayır.";
+  if (report.current.wind_speed_kmph > 35) return "Bugün rüzgâr öne çıkıyor. Açık hava planlarında bunu da hesaba kat.";
+  if (report.current.temperature_c < 12) return "Hava serin; dışarı çıkarken yanına fazladan bir katman alabilirsin.";
+  return "Küçük bir yürüyüşe ya da açık havada bir molaya planlarında yer açabilirsin.";
 }

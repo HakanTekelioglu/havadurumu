@@ -26,6 +26,25 @@ infrastructure/wttr_provider.py
 Arayüz; hava koşuluna göre renk değiştiren tema, °C/°F seçimi, son aramalar,
 yükleme ve hata durumları ile klavye ve mobil kullanım desteği içerir.
 
+## Arayüz tasarımı
+
+Arayüz; açık ve koyu tema, yeşil vurgular, masaüstü yan menü ve mobilde
+doğal sayfa kaydırması sunan ortak bir tasarım sistemi kullanır. Şehir araması,
+popüler şehirler, son aramalar, anlık hava kartı ve üç günlük tahmin aynı
+görsel dilde düzenlenmiştir.
+
+- `frontend/ui.tsx`: shadcn/ui'den uyarlanan Button, Card, Badge, Skeleton
+  ve Radix UI tabanlı Tabs bileşenleri. Projenin mevcut CSS yapısı korunur.
+- `frontend/styles.css`: tema değişkenleri, bileşen stilleri ve duyarlı düzen.
+- Aramaya `/` veya `Ctrl/Cmd + K` ile odaklanılır. Tahmin sekmeleri ok
+  tuşları, Home ve End ile kullanılabilir.
+- Tema, sıcaklık birimi ve son dört arama tarayıcıda saklanır. Depolama
+  kapalıysa uygulama oturum içindeki tercihlerle çalışmaya devam eder.
+- Yeni şehir arandığında önceki istek iptal edilir; sonuçların birbirini
+  ezmesi ve ana sayfaya döndükten sonra eski isteğin ekranı değiştirmesi önlenir.
+
+Bileşen kaynağı ve MIT lisansı: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Kurulum
 
 Python bağımlılıklarını ve frontend paketlerini kurun:
@@ -36,6 +55,25 @@ npm install
 ```
 
 ## Geliştirme
+
+### Tek komutla çalıştırma
+
+```powershell
+npm.cmd start
+```
+
+Bu komut arayüzü derler ve Flask sunucusunu başlatır. Uygulamayı
+`http://127.0.0.1:5000` adresinden açın. PowerShell'de `npm.ps1` yürütme
+ilkesi hatasıyla karşılaşmamak için `npm.cmd` kullanılabilir.
+
+VS Code **Go Live / Live Server** yalnızca statik dosyaları sunar.
+Kökteki `index.html` ise Vite tarafından işlenmesi gereken
+`frontend/main.tsx` dosyasını yükler. Go Live, TSX kodunu derlemediği için
+burada boş ekran veya modül MIME hatası oluşabilir; Flask hava durumu API'sini
+de çalıştırmaz. Bu proje için yukarıdaki komutu veya aşağıdaki Vite geliştirme
+akışını kullanın.
+
+### Canlı kod güncellemeleri (Vite)
 
 İki terminal kullanın:
 
